@@ -21,8 +21,7 @@ namespace skip_list {
             if (curr_height < A.max_height) {
                 while (last_A->next[curr_height] != nullptr) {
                     // Update Traversals Metric
-                    if (instrument_active)
-                        ++op_traversals;
+                    SKIP_LIST_COUNT_TRAVERSAL();
 
                     // Move to the next Node
                     last_A = last_A->next[curr_height];
@@ -45,6 +44,37 @@ namespace skip_list {
         // Reset Sentinels of the original Skip Lists
         std::ranges::fill(A.sentinel->next, nullptr);
         std::ranges::fill(B.sentinel->next, nullptr);
+
+        return res;
+    }
+
+    SkipList SkipList::rebuilding_ordered_union(SkipList&& A, SkipList&& B) {
+        // Initialize the resulting Skip List from the Ordered Union
+        const auto res_max_height{std::max(A.max_height, B.max_height)};
+        SkipList res{res_max_height, A.p, 0};
+        res.rng = A.rng;
+
+        // Insert elements from A
+        for (const auto* curr_node{A.get_head()}; curr_node != nullptr; curr_node = curr_node->next[0]) {
+            // Update Traversals Metric
+            SKIP_LIST_COUNT_TRAVERSAL();
+
+            // Allocate new Node
+            res.insert(curr_node->key);
+        }
+
+        // Insert elements from B
+        for (const auto* curr_node{B.get_head()}; curr_node != nullptr; curr_node = curr_node->next[0]) {
+            // Update Traversals Metric
+            SKIP_LIST_COUNT_TRAVERSAL();
+
+            // Allocate new Node
+            res.insert(curr_node->key);
+        }
+
+        // Clear the original Skip Lists
+        A.clear();
+        B.clear();
 
         return res;
     }
@@ -91,7 +121,7 @@ namespace skip_list {
 
     void SkipList::clear() {
         // Delete Nodes
-        const auto* curr_node{sentinel->next[0]};
+        const auto* curr_node{get_head()};
         const Node* next_node{nullptr};
         while (curr_node != nullptr) {
             next_node = curr_node->next[0];
@@ -113,8 +143,7 @@ namespace skip_list {
             // Move across the current height level
             while (curr_node->next[curr_height] != nullptr) {
                 // Update Comparisons Metric
-                if (instrument_active)
-                    ++op_comparisons;
+                SKIP_LIST_COUNT_COMPARISON();
 
                 // Check if we found the Key
                 if (curr_node->next[curr_height]->key == key) {
@@ -122,14 +151,12 @@ namespace skip_list {
                 }
 
                 // Update Comparisons Metric
-                if (instrument_active)
-                    ++op_comparisons;
+                SKIP_LIST_COUNT_COMPARISON();
 
                 // Check if the Key could still be found at this height level or if we need to move down
                 if (curr_node->next[curr_height]->key < key) {
                     // Update Traversals Metric
-                    if (instrument_active)
-                        ++op_traversals;
+                    SKIP_LIST_COUNT_TRAVERSAL();
 
                     // Keep moving across
                     curr_node = curr_node->next[curr_height];
@@ -155,8 +182,7 @@ namespace skip_list {
             // Move across the current height level
             while (curr_node->next[curr_height] != nullptr) {
                 // Update Comparisons Metric
-                if (instrument_active)
-                    ++op_comparisons;
+                SKIP_LIST_COUNT_COMPARISON();
 
                 // Check if the Key already exists
                 if (curr_node->next[curr_height]->key == key) {
@@ -165,14 +191,12 @@ namespace skip_list {
                 }
 
                 // Update Comparisons Metric
-                if (instrument_active)
-                    ++op_comparisons;
+                SKIP_LIST_COUNT_COMPARISON();
 
                 // Check if the Key could still be found at this height level or if we need to move down
                 if (curr_node->next[curr_height]->key < key) {
                     // Update Traversals Metric
-                    if (instrument_active)
-                        ++op_traversals;
+                    SKIP_LIST_COUNT_TRAVERSAL();
 
                     // Keep moving across
                     curr_node = curr_node->next[curr_height];
@@ -193,6 +217,9 @@ namespace skip_list {
             new_node->next[curr_height] = pred_nodes[curr_height]->next[curr_height];
             pred_nodes[curr_height]->next[curr_height] = new_node;
         }
+
+        // Update Allocations Metric
+        SKIP_LIST_COUNT_ALLOCATION();
 
         // Insertion successful
         return true;
@@ -248,21 +275,18 @@ namespace skip_list {
             --curr_height;
 
             // Update Comparisons Metric
-            if (instrument_active)
-                ++op_comparisons;
+            SKIP_LIST_COUNT_COMPARISON();
 
             // Move across the current height level as long as the next Key is less than or equal to the Pivot
             while (curr_node->next[curr_height] != nullptr && curr_node->next[curr_height]->key <= pivot) {
                 // Update Traversals Metric
-                if (instrument_active)
-                    ++op_traversals;
+                SKIP_LIST_COUNT_TRAVERSAL();
 
                 // Keep moving across
                 curr_node = curr_node->next[curr_height];
 
                 // Update Comparisons Metric
-                if (instrument_active)
-                    ++op_comparisons;
+                SKIP_LIST_COUNT_COMPARISON();
             }
 
             // Wire R's Sentinel at this height level
@@ -287,9 +311,37 @@ namespace skip_list {
         return {std::move(L), std::move(R)};
     }
 
+    std::pair<SkipList, SkipList> SkipList::rebuilding_split(const key_t pivot) {
+        // Initialize resulting Skip Lists from the Split
+        SkipList L{max_height, p, 0};
+        SkipList R{max_height, p, 0};
+        L.rng = rng;
+        R.rng = rng;
+
+        // Traverse original Skip List
+        for (const auto* curr_node{get_head()}; curr_node != nullptr; curr_node = curr_node->next[0]) {
+            // Update Traversals Metric
+            SKIP_LIST_COUNT_TRAVERSAL();
+
+            // Insert in L or R based on the Key and Pivot values
+            if (curr_node->key <= pivot) {
+                // Allocate new Node
+                L.insert(curr_node->key);
+            } else {
+                // Allocate new Node
+                R.insert(curr_node->key);
+            }
+        }
+
+        // Clear original Skip List
+        clear();
+
+        return {std::move(L), std::move(R)};
+    }
+
     bool SkipList::check_invariants() const {
         // If Skip List is empty, Invariants are satisfied
-        auto* curr_node{sentinel->next[0]};
+        auto* curr_node{get_head_mut()};
         if (curr_node == nullptr)
             return true;
 

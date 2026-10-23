@@ -9,7 +9,7 @@
 namespace skip_list {
 
     // Key
-    using key_t = uint64_t;
+    using key_t = int64_t;
     inline constexpr key_t SENTINEL_KEY{std::numeric_limits<key_t>::min()};
 
     // Height
@@ -46,13 +46,95 @@ namespace skip_list {
     // Skip List
     class SkipList {
     public:
+// Enable Instrumentation Metrics in Debug Mode
+#ifndef NDEBUG
+
         // Instrumentation Metrics
         static inline bool instrument_active{false};
         static inline metric_t op_comparisons{0};
         static inline metric_t op_traversals{0};
+        static inline metric_t op_allocations{0};
+
+// Enable Instrumentation Metrics
+#define SKIP_LIST_ENABLE_INSTRUMENTATION() \
+    do { \
+        SkipList::op_comparisons = 0; \
+        SkipList::op_traversals = 0; \
+        SkipList::op_allocations = 0; \
+        SkipList::instrument_active = true; \
+    } while(0)
+
+// Disable Instrumentation Metrics
+#define SKIP_LIST_DISABLE_INSTRUMENTATION() \
+    do { \
+        SkipList::instrument_active = false; \
+    } while(0)
+
+// Print Instrumentation Metrics
+#define SKIP_LIST_PRINT_METRICS(N) \
+    do { \
+        std::cout \
+            << (N) << "\t\t" \
+            << SkipList::op_comparisons << "\t\t" \
+            << SkipList::op_traversals << "\t\t" \
+            << SkipList::op_allocations << "\n"; \
+    } while(0)
+
+// Increase Comparisons Metric
+#define SKIP_LIST_COUNT_COMPARISON() \
+    do { \
+        if (SkipList::instrument_active) \
+            ++SkipList::op_comparisons; \
+    } while(0)
+
+// Increase Traversals Metric
+#define SKIP_LIST_COUNT_TRAVERSAL() \
+    do { \
+        if (SkipList::instrument_active) \
+            ++SkipList::op_traversals; \
+    } while(0)
+
+// Increase Allocations Metric
+#define SKIP_LIST_COUNT_ALLOCATION() \
+        do { \
+            if (SkipList::instrument_active) \
+                ++SkipList::op_allocations; \
+        } while(0) \
+
+// Disable Instrumentation Metrics outside of Debug Mode
+#else
+
+// Enable Instrumentation Metrics
+#define SKIP_LIST_ENABLE_INSTRUMENTATION() \
+    ((void)0)
+
+// Disable Instrumentation Metrics
+#define SKIP_LIST_DISABLE_INSTRUMENTATION() \
+    ((void)0)
+
+// Print Instrumentation Metrics
+#define SKIP_LIST_PRINT_METRICS(N) \
+    ((void)0)
+
+// Increase Comparisons Metric
+#define SKIP_LIST_COUNT_COMPARISON() \
+    ((void)0)
+
+// Increase Traversals Metric
+#define SKIP_LIST_COUNT_TRAVERSAL() \
+    ((void)0)
+
+// Increase Allocations Metric
+#define SKIP_LIST_COUNT_ALLOCATION() \
+    ((void)0)
+
+#endif
 
         // Ordered Union
         static SkipList ordered_union(SkipList&& A, SkipList&& B);
+
+        // Rebuilding Ordered Union
+        static SkipList rebuilding_ordered_union(SkipList&& A, SkipList&& B);
 
         // Constructor
         explicit SkipList(height_t max_height = MAX_HEIGHT_DEFAULT, prob_t p = PROB_DEFAULT, seed_t seed = SEED_DEFAULT);
@@ -73,14 +155,14 @@ namespace skip_list {
             rng.seed(seed);
         }
 
-        // Check if empty
-        bool is_empty() const {
-            return sentinel->next[0] == nullptr;
-        }
-
         // Get head
         const Node* get_head() const {
             return sentinel->next[0];
+        }
+
+        // Check if empty
+        bool is_empty() const {
+            return get_head() == nullptr;
         }
 
         // Get height
@@ -114,6 +196,9 @@ namespace skip_list {
         // Split
         std::pair<SkipList, SkipList> split(key_t pivot);
 
+        // Rebuilding Split
+        std::pair<SkipList, SkipList> rebuilding_split(key_t pivot);
+
         // Check invariants
         bool check_invariants() const;
 
@@ -122,6 +207,11 @@ namespace skip_list {
         height_t max_height;
         prob_t p;
         mutable rng_t rng;
+
+        // Get head
+        Node* get_head_mut() const {
+            return sentinel->next[0];
+        }
 
         // Generate random height
         height_t random_height() const {

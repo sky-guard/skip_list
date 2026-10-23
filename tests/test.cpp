@@ -4,6 +4,7 @@
 #include <set>
 #include <cassert>
 #include <algorithm>
+#include <unordered_map>
 
 namespace skip_list {
 
@@ -39,7 +40,7 @@ namespace skip_list {
                 // Perform Tests on Search (both present and absent Keys)
                 for (key_t key{0}; key < 600; ++key) {
                     auto found{sl.search(key)};
-                    auto ref_found{(ref.find(key) != ref.end())};
+                    auto ref_found{(ref.contains(key))};
                     assert(found == ref_found);
                 }
                 auto inv_3{sl.check_invariants()};
@@ -61,7 +62,7 @@ namespace skip_list {
                 // Perform Tests on Search after Erase
                 for (key_t key{0}; key < 600; ++key) {
                     auto found{sl.search(key)};
-                    auto ref_found{(ref.find(key) != ref.end())};
+                    auto ref_found{(ref.contains(key))};
                     assert(found == ref_found);
                 }
                 auto inv_5{sl.check_invariants()};
@@ -95,6 +96,27 @@ namespace skip_list {
                 assert(search_500);
                 auto inv_clear2{sl.check_invariants()};
                 assert(inv_clear2);
+            }
+        }
+
+        // Boundary Keys Edge Cases
+        {
+            // Initialize Skip List
+            SkipList sl;
+            auto min_key{std::numeric_limits<key_t>::min()};
+            auto max_key{std::numeric_limits<key_t>::max()};
+            auto neg_key{-42000};
+            assert(sl.insert(min_key));
+            assert(sl.insert(max_key));
+            assert(sl.insert(neg_key));
+
+            // Perform Tests on non-duplicate Insertions
+            {
+                assert(sl.search(min_key));
+                assert(sl.search(max_key));
+                assert(sl.search(neg_key));
+
+                assert(sl.check_invariants());
             }
         }
 
@@ -286,6 +308,31 @@ namespace skip_list {
             }
         }
 
+        // Rebuilding Split and Ordered Union functional correctness checks
+        {
+            // Initialize Skip Lists
+            SkipList A, B;
+            for (key_t key = 1; key <= 50; ++key) {
+                auto insert{A.insert(key)};
+                assert(insert);
+            }
+            for (key_t k = 51; k <= 100; ++k) {
+                auto insert{B.insert(k)};
+                assert(insert);
+            }
+
+            // Perform Tests on Rebuilding Split and Ordered Union
+            {
+                auto res_union{SkipList::rebuilding_ordered_union(std::move(A), std::move(B))};
+                assert(res_union.check_invariants());
+                assert(A.is_empty() && B.is_empty());
+
+                auto [L, R]{res_union.rebuilding_split(50)};
+                assert(L.check_invariants() && R.check_invariants());
+                assert(res_union.is_empty());
+            }
+        }
+
         // Reuse of Consumed Inputs
         {
             // Initialize Skip Lists and consume them through Union
@@ -311,6 +358,49 @@ namespace skip_list {
             }
         }
 
+        // Address and Height Preservation Tests
+        {
+            // Initialize Skip List and Node Map with Addresses and Heights
+            SkipList sl;
+            std::unordered_map<key_t, std::pair<const Node*, height_t>> node_map;
+            for (key_t key{1}; key <= 100; ++key) {
+                sl.insert(key);
+            }
+            for (const auto* curr_node{sl.get_head()}; curr_node != nullptr; curr_node = curr_node->next[0]) {
+                node_map[curr_node->key] = {curr_node, curr_node->height};
+            }
+
+            // Perform Tests on Split and Ordered Union
+            {
+                // Perform Split
+                auto [L, R]{sl.split(50)};
+
+                // Verify L nodes
+                for (const auto* curr_node{L.get_head()}; curr_node != nullptr; curr_node = curr_node->next[0]) {
+                    auto [orig_node, orig_height]{node_map[curr_node->key]};
+                    assert(curr_node == orig_node);
+                    assert(curr_node->height == orig_height);
+                }
+
+                // Verify R nodes
+                for (const auto* curr_node{R.get_head()}; curr_node != nullptr; curr_node = curr_node->next[0]) {
+                    auto [orig_node, orig_height]{node_map[curr_node->key]};
+                    assert(curr_node == orig_node);
+                    assert(curr_node->height == orig_height);
+                }
+
+                // Perform Ordered Union
+                auto merged{SkipList::ordered_union(std::move(L), std::move(R))};
+
+                // Verify merged Nodes
+                for (const auto* curr_node{merged.get_head()}; curr_node != nullptr; curr_node = curr_node->next[0]) {
+                    auto [orig_node, orig_height]{node_map[curr_node->key]};
+                    assert(curr_node == orig_node);
+                    assert(curr_node->height == orig_height);
+                }
+            }
+        }
+
         // Randomized Testing Across Multiple Seeds
         {
             // Test different seeds
@@ -321,18 +411,18 @@ namespace skip_list {
                 // Run multiple mixed Operations
                 for (size_t step{0}; step < 1500; ++step) {
                     // Generate pseudo-random Key and Operation Type
-                    const key_t val{step * 37 % 2000};
+                    const auto val{step * 37 % 2000};
                     if (const auto op_type{step % 5}; op_type == 0 || op_type == 1) { // Insert (40%)
-                        auto res_sl{sl.insert(val)};
-                        auto res_ref{ref.insert(val).second};
+                        auto res_sl{sl.insert(static_cast<key_t>(val))};
+                        auto res_ref{ref.insert(static_cast<key_t>(val)).second};
                         assert(res_sl == res_ref);
                     } else if (op_type == 2) { // Erase (20%)
-                        auto res_sl{sl.erase(val)};
-                        auto res_ref{ref.erase(val) > 0};
+                        auto res_sl{sl.erase(static_cast<key_t>(val))};
+                        auto res_ref{ref.erase(static_cast<key_t>(val)) > 0};
                         assert(res_sl == res_ref);
                     } else { // Search (40%)
-                        auto search_sl{sl.search(val)};
-                        auto search_ref{(ref.find(val) != ref.end())};
+                        auto search_sl{sl.search(static_cast<key_t>(val))};
+                        auto search_ref{(ref.contains(static_cast<key_t>(val)))};
                         assert(search_sl == search_ref);
                     }
 
@@ -350,68 +440,66 @@ namespace skip_list {
         }
 
         // Complexity Instrumentation Tests for Ordered Union & Split
+#ifndef NDEBUG
         {
             // Ordered Union Scaling Test
             std::cout << "\n--- Ordered Union Operations Scaling ---\n";
-            std::cout << "N\t\tComparisons\t\tTraversals\n";
-            std::cout << "--------------------------------------------------\n";
+            std::cout << "N\t\tComparisons\tTraversals\tAllocations\n";
+            std::cout << "--------------------------------------------------------\n";
             for (size_t N : {1000, 2000, 4000, 8000, 16000, 32000, 64000}) {
                 // Initialize Skip Lists with equal sizes
                 SkipList A;
                 SkipList B;
-                for (size_t i{0}; i < N / 2; ++i) {
-                    auto ins_A{A.insert(i)};
+                for (size_t key_idx{0}; key_idx < N / 2; ++key_idx) {
+                    auto ins_A{A.insert(static_cast<key_t>(key_idx))};
                     assert(ins_A);
-                    auto ins_B{B.insert(N + i)};
+                    auto ins_B{B.insert(static_cast<key_t>(N + key_idx))};
                     assert(ins_B);
                 }
 
                 // Enable Instrumentation
-                SkipList::op_comparisons = 0;
-                SkipList::op_traversals = 0;
-                SkipList::instrument_active = true;
+                SKIP_LIST_ENABLE_INSTRUMENTATION();
 
                 // Perform Ordered Union
                 auto res{SkipList::ordered_union(std::move(A), std::move(B))};
 
                 // Disable Instrumentation
-                SkipList::instrument_active = false;
+                SKIP_LIST_DISABLE_INSTRUMENTATION();
 
                 // Print Instrumentation results
-                std::cout << N << "\t\t" << SkipList::op_comparisons << "\t\t" << SkipList::op_traversals << "\n";
+                SKIP_LIST_PRINT_METRICS(N);
                 auto inv_res{res.check_invariants()};
                 assert(inv_res);
             }
 
             // Split Scaling Test
             std::cout << "\n--- Split Operations Scaling ---\n";
-            std::cout << "N\t\tComparisons\t\tTraversals\n";
-            std::cout << "--------------------------------------------------\n";
+            std::cout << "N\t\tComparisons\tTraversals\tAllocations\n";
+            std::cout << "--------------------------------------------------------\n";
             for (size_t N : {1000, 2000, 4000, 8000, 16000, 32000, 64000}) {
                 // Initialize Skip List
                 SkipList sl;
-                for (size_t i{0}; i < N; ++i) {
-                    auto ins{sl.insert(i * 2)};
+                for (size_t key_idx{0}; key_idx < N; ++key_idx) {
+                    auto ins{sl.insert(static_cast<key_t>(key_idx * 2))};
                     assert(ins);
                 }
 
                 // Enable Instrumentation
-                SkipList::op_comparisons = 0;
-                SkipList::op_traversals = 0;
-                SkipList::instrument_active = true;
+                SKIP_LIST_ENABLE_INSTRUMENTATION();
 
                 // Perform Split
-                auto [L, R]{sl.split(N)};
+                auto [L, R]{sl.split(static_cast<key_t>(N))};
 
                 // Disable Instrumentation
-                SkipList::instrument_active = false;
+                SKIP_LIST_DISABLE_INSTRUMENTATION();
 
                 // Print Instrumentation results
-                std::cout << N << "\t\t" << SkipList::op_comparisons << "\t\t" << SkipList::op_traversals << "\n";
+                SKIP_LIST_PRINT_METRICS(N);
                 auto inv_LR{L.check_invariants() && R.check_invariants()};
                 assert(inv_LR);
             }
         }
+#endif
 
         std::cout << "[+] Skip List Tests completed successfully!\n";
     }
