@@ -43,10 +43,16 @@ namespace skip_list {
         auto query{queries[query_idx]};
         for (auto _ : state) {
             // Time Search
-            state.ResumeTiming();
+            auto start{std::chrono::high_resolution_clock::now()};
             auto res{sl.search(query)};
-            state.PauseTiming();
+            auto end{std::chrono::high_resolution_clock::now()};
+
+            // Prevent compiler optimizations
             benchmark::DoNotOptimize(res);
+
+            // Record elapsed time manually
+            std::chrono::duration<double> elapsed = end - start;
+            state.SetIterationTime(elapsed.count());
 
             // Set up next iteration
             query_idx = (query_idx + 1) % queries.size();
@@ -85,10 +91,16 @@ namespace skip_list {
         auto absent_key{absent_keys[key_idx]};
         for (auto _ : state) {
             // Time Insert
-            state.ResumeTiming();
+            auto start{std::chrono::high_resolution_clock::now()};
             auto res{sl.insert(absent_key)};
-            state.PauseTiming();
+            auto end{std::chrono::high_resolution_clock::now()};
+
+            // Prevent compiler optimizations
             benchmark::DoNotOptimize(res);
+
+            // Record elapsed time manually
+            std::chrono::duration<double> elapsed = end - start;
+            state.SetIterationTime(elapsed.count());
 
             // Set up next iteration
             sl.erase(absent_key);
@@ -102,26 +114,37 @@ namespace skip_list {
 
     // Ordered Union Benchmark (disjoint ranges, |A| = |B| = N/2)
     static void BM_SkipListOrderedUnion(benchmark::State& state) {
-        // Generate N, Seed
+        // Generate N, Seed, Pivot
         const auto N{static_cast<size_t>(state.range(0))};
         const auto seed{static_cast<seed_t>(state.range(1))};
+        const auto pivot{N / 2};
+
+        // Initialize Skip Lists
+        SkipList A{MAX_HEIGHT_DEFAULT, PROB_DEFAULT, seed};
+        SkipList B{MAX_HEIGHT_DEFAULT, PROB_DEFAULT, seed + 1};
+        for (size_t key_idx = 0; key_idx < N / 2; ++key_idx)
+            A.insert(key_idx);
+        for (size_t key_idx = 0; key_idx < N / 2; ++key_idx)
+            B.insert(N + key_idx);
 
         // Run Ordered Unions
         for (auto _ : state) {
-            // Set up next iteration
-            state.PauseTiming();
-            SkipList A{MAX_HEIGHT_DEFAULT, PROB_DEFAULT, seed};
-            SkipList B{MAX_HEIGHT_DEFAULT, PROB_DEFAULT, seed + 1};
-            for (size_t key_idx = 0; key_idx < N / 2; ++key_idx)
-                A.insert(key_idx);
-            for (size_t key_idx = 0; key_idx < N / 2; ++key_idx)
-                B.insert(N + key_idx);
-
             // Time Ordered Union
-            state.ResumeTiming();
+            auto start{std::chrono::high_resolution_clock::now()};
             auto res{SkipList::ordered_union(std::move(A), std::move(B))};
-            state.PauseTiming();
+            auto end{std::chrono::high_resolution_clock::now()};
+
+            // Prevent compiler optimizations
             benchmark::DoNotOptimize(res);
+
+            // Record elapsed time manually
+            std::chrono::duration<double> elapsed = end - start;
+            state.SetIterationTime(elapsed.count());
+
+            // Set up next iteration
+            auto [L, R]{res.split(pivot)};
+            A = std::move(L);
+            B = std::move(R);
         }
 
         // Set State Complexity
@@ -130,20 +153,18 @@ namespace skip_list {
 
     // Split Benchmark (Pivot giving approximately equal output sizes)
     static void BM_SkipListSplit(benchmark::State& state) {
-        // Generate N, Seed
+        // Generate N, Seed, Pivot
         const auto N{static_cast<size_t>(state.range(0))};
         const auto seed{static_cast<seed_t>(state.range(1))};
-
-        // Determine Pivot for equal splitting
         const auto pivot{N};
 
-        for (auto _ : state) {
-            // Set up next iteration
-            SkipList sl{MAX_HEIGHT_DEFAULT, PROB_DEFAULT, seed};
-            for (size_t key_idx = 0; key_idx < N; ++key_idx) {
-                sl.insert(key_idx * 2);
-            }
+        // Initialize Skip List
+        SkipList sl{MAX_HEIGHT_DEFAULT, PROB_DEFAULT, seed};
+        for (size_t key_idx = 0; key_idx < N; ++key_idx) {
+            sl.insert(key_idx * 2);
+        }
 
+        for (auto _ : state) {
             // Time Split
             auto start{std::chrono::high_resolution_clock::now()};
             auto res{sl.split(pivot)};
@@ -155,6 +176,9 @@ namespace skip_list {
             // Record elapsed time manually
             std::chrono::duration<double> elapsed = end - start;
             state.SetIterationTime(elapsed.count());
+
+            // Set up next iteration
+            sl = SkipList::ordered_union(std::move(res.first), std::move(res.second));
         }
 
         // Set State Complexity
@@ -177,7 +201,7 @@ namespace skip_list {
     // Register benchmarks
     // BENCHMARK_CONFIG(BM_SkipListSearch);
     // BENCHMARK_CONFIG(BM_SkipListInsert);
-    // BENCHMARK_CONFIG(BM_SkipListOrderedUnion);
+    BENCHMARK_CONFIG(BM_SkipListOrderedUnion);
     BENCHMARK_CONFIG(BM_SkipListSplit);
 
 } // namespace skip_list
