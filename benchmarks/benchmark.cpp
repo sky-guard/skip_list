@@ -199,8 +199,8 @@ namespace skip_list {
             ->Complexity(benchmark::oLogN)
 
     // Register benchmarks
-    // BENCHMARK_CONFIG(BM_SkipListSearch);
-    // BENCHMARK_CONFIG(BM_SkipListInsert);
+    BENCHMARK_CONFIG(BM_SkipListSearch);
+    BENCHMARK_CONFIG(BM_SkipListInsert);
     BENCHMARK_CONFIG(BM_SkipListOrderedUnion);
     BENCHMARK_CONFIG(BM_SkipListSplit);
 
