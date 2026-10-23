@@ -1,0 +1,21 @@
+[project]
+name = "skip-list"
+version = "0.1.0"
+description = "Skip List Implementation in C++."
+readme = "README.md"
+authors = [
+    { name = "sky", email = "198247895+sky-guard@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "matplotlib>=3.11.2",
+    "numpy>=2.5.4",
+    "pandas>=3.1.0",
+]
+
+[project.scripts]
+skip-list = "skip_list:main"
+
+[build-system]
+requires = ["uv_build>=0.13.4,<0.14.0"]
+build-backend = "uv_build"

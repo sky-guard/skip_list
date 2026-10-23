@@ -4,6 +4,7 @@
 #include <set>
 #include <cassert>
 #include <algorithm>
+#include <fstream>
 #include <unordered_map>
 
 namespace skip_list {
@@ -442,62 +443,190 @@ namespace skip_list {
         // Complexity Instrumentation Tests for Ordered Union & Split
 #ifndef NDEBUG
         {
-            // Ordered Union Scaling Test
-            std::cout << "\n--- Ordered Union Operations Scaling ---\n";
-            std::cout << "N\t\tComparisons\tTraversals\tAllocations\n";
-            std::cout << "--------------------------------------------------------\n";
-            for (size_t N : {1000, 2000, 4000, 8000, 16000, 32000, 64000}) {
-                // Initialize Skip Lists with equal sizes
-                SkipList A;
-                SkipList B;
-                for (size_t key_idx{0}; key_idx < N / 2; ++key_idx) {
-                    auto ins_A{A.insert(static_cast<key_t>(key_idx))};
-                    assert(ins_A);
-                    auto ins_B{B.insert(static_cast<key_t>(N + key_idx))};
-                    assert(ins_B);
+            std::cout << "[+] Generating logical_work.json...\n";
+
+            // Define Input Sizes and Seeds (matching with Google Benchmark)
+            std::vector<size_t> sizes{1024, 4096, 16384, 65536, 262144, 1048576};
+            std::vector<seed_t> seeds{17, 42, 1337};
+
+            // Data Structures to store the Instrumentation Metrics
+            std::vector<metric_t> u_struct_comps, u_struct_travs, u_struct_allocs;
+            std::vector<metric_t> u_rebuild_comps, u_rebuild_travs, u_rebuild_allocs;
+            std::vector<metric_t> s_struct_comps, s_struct_travs, s_struct_allocs;
+            std::vector<metric_t> s_rebuild_comps, s_rebuild_travs, s_rebuild_allocs;
+
+            // Run Instrumentation Tests over multiple Input Sizes
+            for (auto N : sizes) {
+                // Accumulators for averaging across seeds
+                metric_t us_c{0}, us_t{0}, us_a{0};
+                metric_t ur_c{0}, ur_t{0}, ur_a{0};
+                metric_t ss_c{0}, ss_t{0}, ss_a{0};
+                metric_t sr_c{0}, sr_t{0}, sr_a{0};
+
+                // Run Instrumentation Tests over multiple Seeds per Input Size
+                for (auto seed: seeds) {
+                    // Structural Ordered Union
+                    {
+                        // Initialize Skip Lists
+                        SkipList A{MAX_HEIGHT_DEFAULT, PROB_DEFAULT, seed};
+                        SkipList B{MAX_HEIGHT_DEFAULT, PROB_DEFAULT, seed + 1};
+                        for (size_t key_idx{0}; key_idx < N / 2; ++key_idx) {
+                            A.insert(static_cast<key_t>(key_idx));
+                            B.insert(static_cast<key_t>(N + key_idx));
+                        }
+
+                        // Collect Instrumentation Metrics
+                        SKIP_LIST_ENABLE_INSTRUMENTATION();
+                        auto res{SkipList::ordered_union(std::move(A), std::move(B))};
+                        SKIP_LIST_DISABLE_INSTRUMENTATION();
+
+                        // Accumulate Instrumentation Metrics
+                        us_c += SkipList::op_comparisons;
+                        us_t += SkipList::op_traversals;
+                        us_a += SkipList::op_allocations;
+
+                        // Check Invariants
+                        assert(res.check_invariants());
+                    }
+
+                    // Rebuilding Ordered Union
+                    {
+                        // Initialize Skip Lists
+                        SkipList A{MAX_HEIGHT_DEFAULT, PROB_DEFAULT, seed};
+                        SkipList B{MAX_HEIGHT_DEFAULT, PROB_DEFAULT, seed + 1};
+                        for (size_t key_idx{0}; key_idx < N / 2; ++key_idx) {
+                            A.insert(static_cast<key_t>(key_idx));
+                            B.insert(static_cast<key_t>(N + key_idx));
+                        }
+
+                        // Collect Instrumentation Metrics
+                        SKIP_LIST_ENABLE_INSTRUMENTATION();
+                        auto res{SkipList::rebuilding_ordered_union(std::move(A), std::move(B))};
+                        SKIP_LIST_DISABLE_INSTRUMENTATION();
+
+                        // Accumulate Instrumentation Metrics
+                        ur_c += SkipList::op_comparisons;
+                        ur_t += SkipList::op_traversals;
+                        ur_a += SkipList::op_allocations;
+
+                        // Check Invariants
+                        assert(res.check_invariants());
+                    }
+
+                    // Structural Split
+                    {
+                        // Initialize Skip List
+                        SkipList sl{MAX_HEIGHT_DEFAULT, PROB_DEFAULT, seed};
+                        for (size_t key_idx{0}; key_idx < N; ++key_idx) {
+                            sl.insert(static_cast<key_t>(key_idx * 2));
+                        }
+
+                        // Collect Instrumentation Metrics
+                        SKIP_LIST_ENABLE_INSTRUMENTATION();
+                        auto [L, R]{sl.split(static_cast<key_t>(N))};
+                        SKIP_LIST_DISABLE_INSTRUMENTATION();
+
+                        // Accumulate Instrumentation Metrics
+                        ss_c += SkipList::op_comparisons;
+                        ss_t += SkipList::op_traversals;
+                        ss_a += SkipList::op_allocations;
+
+                        // Check Invariants
+                        assert(L.check_invariants() && R.check_invariants());
+                    }
+
+                    // Rebuilding Split
+                    {
+                        // Initialize Skip List
+                        SkipList sl{MAX_HEIGHT_DEFAULT, PROB_DEFAULT, seed};
+                        for (size_t key_idx{0}; key_idx < N; ++key_idx) {
+                            sl.insert(static_cast<key_t>(key_idx * 2));
+                        }
+
+                        // Collect Instrumentation Metrics
+                        SKIP_LIST_ENABLE_INSTRUMENTATION();
+                        auto [L, R]{sl.rebuilding_split(static_cast<key_t>(N))};
+                        SKIP_LIST_DISABLE_INSTRUMENTATION();
+
+                        // Accumulate Instrumentation Metrics
+                        sr_c += SkipList::op_comparisons;
+                        sr_t += SkipList::op_traversals;
+                        sr_a += SkipList::op_allocations;
+
+                        // Check Invariants
+                        assert(L.check_invariants() && R.check_invariants());
+                    }
                 }
 
-                // Enable Instrumentation
-                SKIP_LIST_ENABLE_INSTRUMENTATION();
+                // Compute Means across Seeds and store
+                size_t num_seeds = seeds.size();
 
-                // Perform Ordered Union
-                auto res{SkipList::ordered_union(std::move(A), std::move(B))};
+                // Unordered Union Structural
+                u_struct_comps.push_back(us_c / num_seeds);
+                u_struct_travs.push_back(us_t / num_seeds);
+                u_struct_allocs.push_back(us_a / num_seeds);
 
-                // Disable Instrumentation
-                SKIP_LIST_DISABLE_INSTRUMENTATION();
+                // Unordered Union Rebuild
+                u_rebuild_comps.push_back(ur_c / num_seeds);
+                u_rebuild_travs.push_back(ur_t / num_seeds);
+                u_rebuild_allocs.push_back(ur_a / num_seeds);
 
-                // Print Instrumentation results
-                SKIP_LIST_PRINT_METRICS(N);
-                auto inv_res{res.check_invariants()};
-                assert(inv_res);
+                // Split Structural
+                s_struct_comps.push_back(ss_c / num_seeds);
+                s_struct_travs.push_back(ss_t / num_seeds);
+                s_struct_allocs.push_back(ss_a / num_seeds);
+
+                // Split Rebuild
+                s_rebuild_comps.push_back(sr_c / num_seeds);
+                s_rebuild_travs.push_back(sr_t / num_seeds);
+                s_rebuild_allocs.push_back(sr_a / num_seeds);
             }
 
-            // Split Scaling Test
-            std::cout << "\n--- Split Operations Scaling ---\n";
-            std::cout << "N\t\tComparisons\tTraversals\tAllocations\n";
-            std::cout << "--------------------------------------------------------\n";
-            for (size_t N : {1000, 2000, 4000, 8000, 16000, 32000, 64000}) {
-                // Initialize Skip List
-                SkipList sl;
-                for (size_t key_idx{0}; key_idx < N; ++key_idx) {
-                    auto ins{sl.insert(static_cast<key_t>(key_idx * 2))};
-                    assert(ins);
-                }
+            // Write out to logical_work.json
+            std::ofstream json_out{"logical_work.json"};
 
-                // Enable Instrumentation
-                SKIP_LIST_ENABLE_INSTRUMENTATION();
-
-                // Perform Split
-                auto [L, R]{sl.split(static_cast<key_t>(N))};
-
-                // Disable Instrumentation
-                SKIP_LIST_DISABLE_INSTRUMENTATION();
-
-                // Print Instrumentation results
-                SKIP_LIST_PRINT_METRICS(N);
-                auto inv_LR{L.check_invariants() && R.check_invariants()};
-                assert(inv_LR);
+            // Write Input Sizes
+            json_out << "{\n  \"N\": [";
+            for (size_t sizes_idx{0}; sizes_idx < sizes.size(); ++sizes_idx) {
+                json_out << sizes[sizes_idx] << (sizes_idx + 1 == sizes.size() ? "" : ", ");
             }
+            json_out << "],\n";
+
+            // Helper function to write Instrumentation Metrics
+            auto write_metric_block = [&](const std::string& name, const std::vector<uint64_t>& c, const std::vector<uint64_t>& t, const std::vector<uint64_t>& a, const bool last) {
+                // Write Operation name
+                json_out << "  \"" << name << "\": {\n";
+
+                // Write Comparisons
+                json_out << "    \"comparisons\": [";
+                for (size_t idx{0}; idx < c.size(); ++idx)
+                    json_out << c[idx] << (idx + 1 == c.size() ? "" : ", ");
+
+                // Write Traversals
+                json_out << "],\n    \"traversals\": [";
+                for (size_t idx{0}; idx < t.size(); ++idx)
+                    json_out << t[idx] << (idx + 1 == t.size() ? "" : ", ");
+
+                // Write Allocations
+                json_out << "],\n    \"allocations\": [";
+                for (size_t idx{0}; idx < a.size(); ++idx)
+                    json_out << a[idx] << (idx + 1 == a.size() ? "" : ", ");
+
+                // Close JSON object
+                json_out << "]\n  }" << (last ? "\n" : ",\n");
+            };
+
+            // Write Instrumentation Metrics
+            write_metric_block("ordered_union_structural", u_struct_comps, u_struct_travs, u_struct_allocs, false);
+            write_metric_block("ordered_union_rebuilding", u_rebuild_comps, u_rebuild_travs, u_rebuild_allocs, false);
+            write_metric_block("split_structural", s_struct_comps, s_struct_travs, s_struct_allocs, false);
+            write_metric_block("split_rebuilding", s_rebuild_comps, s_rebuild_travs, s_rebuild_allocs, true);
+
+            // Close JSON object and file
+            json_out << "}\n";
+            json_out.close();
+
+            std::cout << "[+] Successfully wrote 'logical_work.json'!\n";
         }
 #endif
 

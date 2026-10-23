@@ -257,18 +257,18 @@ namespace skip_list {
         state.SetComplexityN(static_cast<int64_t>(N));
     }
 
-    // Register benchmarks with geometric sizes and multiple Seeds
-    // Sizes: 2^10 to 2^20 (6 sizes), Seeds: {17, 42, 1337} (3 seeds)
-    #define BENCHMARK_CONFIG(func) \
-        BENCHMARK(func) \
-            ->Args({1 << 10, 17})->Args({1 << 10, 42})->Args({1 << 10, 1337}) \
-            ->Args({1 << 12, 17})->Args({1 << 12, 42})->Args({1 << 12, 1337}) \
-            ->Args({1 << 14, 17})->Args({1 << 14, 42})->Args({1 << 14, 1337}) \
-            ->Args({1 << 16, 17})->Args({1 << 16, 42})->Args({1 << 16, 1337}) \
-            ->Args({1 << 18, 17})->Args({1 << 18, 42})->Args({1 << 18, 1337}) \
-            ->Args({1 << 20, 17})->Args({1 << 20, 42})->Args({1 << 20, 1337}) \
-            ->UseManualTime() \
-            ->Complexity(benchmark::oLogN)
+// Register benchmarks with geometric sizes and multiple Seeds
+// Sizes: 2^10 to 2^20 (6 sizes), Seeds: {17, 42, 1337} (3 seeds)
+#define BENCHMARK_CONFIG(func) \
+    BENCHMARK(func) \
+        ->Args({1 << 10, 17})->Args({1 << 10, 42})->Args({1 << 10, 1337}) \
+        ->Args({1 << 12, 17})->Args({1 << 12, 42})->Args({1 << 12, 1337}) \
+        ->Args({1 << 14, 17})->Args({1 << 14, 42})->Args({1 << 14, 1337}) \
+        ->Args({1 << 16, 17})->Args({1 << 16, 42})->Args({1 << 16, 1337}) \
+        ->Args({1 << 18, 17})->Args({1 << 18, 42})->Args({1 << 18, 1337}) \
+        ->Args({1 << 20, 17})->Args({1 << 20, 42})->Args({1 << 20, 1337}) \
+        ->UseManualTime() \
+        ->Complexity(benchmark::oLogN)
 
     // Register benchmarks
     BENCHMARK_CONFIG(BM_SkipListSearch);
