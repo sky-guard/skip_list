@@ -1,5 +1,15 @@
 {
   "N": [1024, 4096, 16384, 65536, 262144, 1048576],
+  "search_structural": {
+    "comparisons": [33, 34, 51, 63, 62, 79],
+    "traversals": [10, 7, 15, 16, 14, 20],
+    "allocations": [0, 0, 0, 0, 0, 0]
+  },
+  "insert_structural": {
+    "comparisons": [41, 41, 60, 66, 69, 82],
+    "traversals": [11, 8, 16, 17, 15, 21],
+    "allocations": [1, 1, 1, 1, 1, 1]
+  },
   "ordered_union_structural": {
     "comparisons": [0, 0, 0, 0, 0, 0],
     "traversals": [11, 9, 17, 16, 15, 20],

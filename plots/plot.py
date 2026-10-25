@@ -68,7 +68,6 @@ ns = np.array(lw['N'])
 
 fig2, (ax_union, ax_split) = plt.subplots(1, 2, figsize=(11, 4.5), dpi=300)
 
-
 # Helper function to plot structural vs rebuilding metrics for an operation
 def plot_op_metrics(ax, struct_data, rebuild_data, title, struct_color, rebuild_color):
     # Structural metrics (Solid = Comp, Dashed = Trav, Dotted = Alloc)
@@ -105,3 +104,31 @@ fig2.tight_layout()
 fig2.savefig('logical_work_comparison.pdf', bbox_inches='tight')
 fig2.savefig('logical_work_comparison.png', bbox_inches='tight')
 print("[+] Generated standalone 'logical_work_comparison.pdf'")
+
+# --- 3. GENERATE FIGURE 3: LOGICAL WORK COMPARISON (INSERT & SEARCH) ---
+fig3, (ax_search, ax_insert) = plt.subplots(1, 2, figsize=(11, 4.5), dpi=300)
+
+def plot_single_kernel_metrics(ax, struct_data, title, color):
+    # Structural metrics for single kernels (Search / Insert)
+    ax.plot(ns, struct_data['comparisons'], marker='o', linestyle='-', color=color, label='Comparisons')
+    ax.plot(ns, struct_data['traversals'], marker='s', linestyle='--', color=color, label='Traversals')
+    ax.plot(ns, struct_data['allocations'], marker='^', linestyle=':', color=color, label='Allocations')
+
+    ax.set_xscale('log', base=2)
+    ax.set_yscale('symlog', base=10)
+    ax.set_xlabel('Input Size $N$ (keys)', fontsize=10, fontweight='bold')
+    ax.set_ylabel('Logical Work Count', fontsize=10, fontweight='bold')
+    ax.set_title(title, fontsize=11, fontweight='bold')
+    ax.grid(True, which="both", ls="--", alpha=0.4)
+    ax.legend(fontsize=6.5, loc='upper left', frameon=True)
+
+# Plot Search (Color: #1f77b4) on the left
+plot_single_kernel_metrics(ax_search, lw['search_structural'], '(a) Search: Structural', '#1f77b4')
+
+# Plot Insert (Color: #ff7f0e) on the right
+plot_single_kernel_metrics(ax_insert, lw['insert_structural'], '(b) Insert: Structural', '#ff7f0e')
+
+fig3.tight_layout()
+fig3.savefig('logical_work_search_insert.pdf', bbox_inches='tight')
+fig3.savefig('logical_work_search_insert.png', bbox_inches='tight')
+print("[+] Generated standalone 'logical_work_search_insert.pdf'")

@@ -45,6 +45,10 @@ struct Node {
 };
 ```
 
+Each Node contains its **Key** and **Height** values, as well as a **Vector of Pointers to the next Nodes: the number of Pointers is equal to the Height of the Node**.
+
+Please note that **the Sentinel itself is also represented as an ordinary Node**.
+
 Lastly, here follows the representation that has instead been chosen for the **Skip List** itself, including its **Public Interface**:
 ```c++
 // Skip List
@@ -188,6 +192,16 @@ In the case of **consuming Operations (ordered_union, split)**, **the consumed I
 
 **Each allocated Node is freed exactly once**, preventing **Memory Leaks**.
 
+## Theoretical Complexity Analysis
+
+**Skip Lists maintain the same probabilistic balance analogous to other Randomized Data Structures, such as Treaps**. Therefore, **we have the same expected Time Complexity guarantees**:
+- **search and insert ~ $O(\log(n))$**: Traverse the Skip List from the highest Height level, moving horizontally across and dropping down a level when encountering a larger Key or null. **Because the expected Height is $O(log(n))$ and the expected number of steps per level is bounded by a Constant, both Search and Insert Operations execute in $O(\log(n))$ expected Time Complexity**.
+- **ordered_union ~ $O(\log(n+m))$**: Since inputs are disjoint and pre-sorted, Structural Ordered Union bypasses re-insertions entirely by rewiring the Tail Pointers of the first list into the Head of the second list across all corresponding Height levels. **Searching for the Tail of a Skip List is $O(log(n))$, as is rewiring a Node's Pointers, therefore the expected Time Complexity is of $O(\log(n+m))$**.
+- **split ~ $O(\log(n))$**: Like before, **searching for the Pivot and rewiring a Node's Pointers at the split boundary to divides the list into two independent sub-lists are both $O(log(n))$ Operations. Therefore, the expected Time Complexity is $O(log(n))$**.
+
+Additionally, as for the **Space Complexity**:
+- **Storage ($O(n)$)**: Each node of Height $h$ contains $h$ forward Pointers. Since Node Heights follow a geometric distribution where the probability of a Node having Height $h$ is $p^h$, **the expected Height (and Pointer count) per Node is $\sum_{h=0}^{\infty} p^{h} = 1/p$**. Thus, **total Memory overhead scales linearly with $n/p$ Pointers, ensuring an expected Space Complexity of $O(n)$**. 
+
 ## Structural VS Rebuilding Operations
 
 In addition to the Structural Operations, **a baseline Rebuilding version of the ordered_union and split Operations has also been provided and used during testing to verify the expected results**. This was done to confirm that indeed **the baseline Rebuilding versions of the previously mentioned Operations are much slower than the Structural ones, demonstrating a $O(nlog(n))$ Time Complexity and $O(n)$ Node Allocations**.
@@ -216,7 +230,15 @@ static inline metric_t op_traversals{0};
 static inline metric_t op_allocations{0};
 ```
 
-Let's analyze the plotted results:
+Let's analyze the plotted results for the **Structural versions of search and insert**:
+
+![Logical Work Comparison](plots/logical_work_search_insert.png)
+
+**On the left, we can see the three Instrumentation Metrics plotted for the Structural search (in blue)**: as expected, **we can see that no Allocations were made and that the Comparisons and Traversals follow pretty much a horizontal line, confirming a Logarithmic trend**.
+
+**On the right, we can see the three Instrumentation Metrics plotted for the Structural insert (in orange)**: as expected, **we can see that only one Allocation was made and that the Comparisons and Traversals again follow pretty much a horizontal line, confirming the same Logarithmic trend**.
+
+Let's analyze the plotted results for the **Structural VS Rebuilding versions of ordered_union and split**:
 
 ![Logical Work Comparison](plots/logical_work_comparison.png)
 
@@ -332,6 +354,15 @@ BENCHMARK_CONFIG(BM_SkipListOrderedUnionRebuilding);
 - **ordered_union and split Operations achieved an RMS of around 20%**: a very clean fit to the theoretical result.
 
 Meanwhile, **Rebuilding Operations failed to fit to the provided Logarithmic Complexity Model: RMS spiked up and above 150%, a clear sign that this version of the Operations is unable to achieve $O(log(n))$ Time Complexity**. **Testing a Linear Complexity Model instead, revealed a much lower RMS value of 10%**: a definite proof of our hypothesis.
+
+| Benchmark                    | Time Coefficient ($O(\log N)$) | Time RMS (%) | CPU Coefficient ($O(\log N)$) | CPU RMS (%) |
+|------------------------------|--------------------------------|--------------|-------------------------------|-------------|
+| **Search**                   | 22.13                          | 66%          | 23.71                         | 59%         |
+| **Insert**                   | 25.26                          | 55%          | 34.57                         | 38%         |
+| **Ordered Union**            | 65.39                          | 20%          | 198.86                        | 21%         |
+| **Split**                    | 124.23                         | 22%          | 193.11                        | 21%         |
+| **Split Rebuilding**         | 2,374,359.06                   | 144%         | 4,744,905.75                  | 144%        |
+| **Ordered Union Rebuilding** | 2,420,403.26                   | 144%         | 2,410,880.13                  | 144%        |
 
 Additionally:
 - **the search Benchmark uses pre-generated queries with a 50% Hit Rate and 50% Miss Rate, spread evenly across the Key Range**.

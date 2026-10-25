@@ -500,6 +500,8 @@ namespace skip_list {
         std::vector<seed_t> seeds{17, 42, 1337};
 
         // Data Structures to store the Instrumentation Metrics
+        std::vector<metric_t> sh_struct_comps, sh_struct_travs, sh_struct_allocs;
+        std::vector<metric_t> i_struct_comps, i_struct_travs, i_struct_allocs;
         std::vector<metric_t> u_struct_comps, u_struct_travs, u_struct_allocs;
         std::vector<metric_t> u_rebuild_comps, u_rebuild_travs, u_rebuild_allocs;
         std::vector<metric_t> s_struct_comps, s_struct_travs, s_struct_allocs;
@@ -508,6 +510,8 @@ namespace skip_list {
         // Run Instrumentation Tests over multiple Input Sizes
         for (auto N : sizes) {
             // Accumulators for averaging across seeds
+            metric_t shs_c{0}, shs_t{0}, shs_a{0};
+            metric_t is_c{0}, is_t{0}, is_a{0};
             metric_t us_c{0}, us_t{0}, us_a{0};
             metric_t ur_c{0}, ur_t{0}, ur_a{0};
             metric_t ss_c{0}, ss_t{0}, ss_a{0};
@@ -515,6 +519,56 @@ namespace skip_list {
 
             // Run Instrumentation Tests over multiple Seeds per Input Size
             for (const auto seed: seeds) {
+                // Structural Search
+                {
+                    // Initialize Skip List
+                    SkipList sl{MAX_HEIGHT_DEFAULT, PROB_DEFAULT, seed};
+                    for (size_t key_idx{0}; key_idx < N; ++key_idx) {
+                        sl.insert(static_cast<key_t>(key_idx * 2));
+                    }
+
+                    // Generate absent query Key
+                    auto query_key{static_cast<key_t>(N)};
+
+                    // Collect Instrumentation Metrics
+                    SKIP_LIST_ENABLE_INSTRUMENTATION();
+                    assert(sl.search(query_key));
+                    SKIP_LIST_DISABLE_INSTRUMENTATION();
+
+                    // Accumulate Instrumentation Metrics
+                    shs_c += SkipList::op_comparisons;
+                    shs_t += SkipList::op_traversals;
+                    shs_a += SkipList::op_allocations;
+
+                    // Check Invariants
+                    assert(sl.check_invariants());
+                }
+
+                // Structural Insert
+                {
+                    // Initialize Skip List
+                    SkipList sl{MAX_HEIGHT_DEFAULT, PROB_DEFAULT, seed};
+                    for (size_t key_idx{0}; key_idx < N; ++key_idx) {
+                        sl.insert(static_cast<key_t>(key_idx * 2));
+                    }
+
+                    // Generate absent Key
+                    auto new_key{static_cast<key_t>(N + 1)};
+
+                    // Collect Instrumentation Metrics
+                    SKIP_LIST_ENABLE_INSTRUMENTATION();
+                    sl.insert(new_key);
+                    SKIP_LIST_DISABLE_INSTRUMENTATION();
+
+                    // Accumulate Instrumentation Metrics
+                    is_c += SkipList::op_comparisons;
+                    is_t += SkipList::op_traversals;
+                    is_a += SkipList::op_allocations;
+
+                    // Check Invariants
+                    assert(sl.check_invariants());
+                }
+
                 // Structural Ordered Union
                 {
                     // Initialize Skip Lists
@@ -611,6 +665,16 @@ namespace skip_list {
             // Compute Means across Seeds and store
             const auto num_seeds = seeds.size();
 
+            // Search Structural
+            sh_struct_comps.push_back(shs_c / num_seeds);
+            sh_struct_travs.push_back(shs_t / num_seeds);
+            sh_struct_allocs.push_back(shs_a / num_seeds);
+
+            // Insert Structural
+            i_struct_comps.push_back(is_c / num_seeds);
+            i_struct_travs.push_back(is_t / num_seeds);
+            i_struct_allocs.push_back(is_a / num_seeds);
+
             // Unordered Union Structural
             u_struct_comps.push_back(us_c / num_seeds);
             u_struct_travs.push_back(us_t / num_seeds);
@@ -669,6 +733,8 @@ namespace skip_list {
         };
 
         // Write Instrumentation Metrics
+        write_metric_block("search_structural", sh_struct_comps, sh_struct_travs, sh_struct_allocs, false);
+        write_metric_block("insert_structural", i_struct_comps, i_struct_travs, i_struct_allocs, false);
         write_metric_block("ordered_union_structural", u_struct_comps, u_struct_travs, u_struct_allocs, false);
         write_metric_block("ordered_union_rebuilding", u_rebuild_comps, u_rebuild_travs, u_rebuild_allocs, false);
         write_metric_block("split_structural", s_struct_comps, s_struct_travs, s_struct_allocs, false);
