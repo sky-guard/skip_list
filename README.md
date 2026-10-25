@@ -23,7 +23,7 @@ using prob_t = double;
 inline constexpr prob_t PROB_DEFAULT{0.5};
 ```
 
-**Node Heights are capped**, with a **Default Maximum Height** of:
+**Node Heights are capped to avoid Probabilistic Anomalies and Unbounded Growth**, with a **Default Maximum Height** of:
 ```c++
 // Height
 using height_t = u_int8_t;
@@ -171,14 +171,14 @@ In order to generate the Plots, synchronize your Virtual Environment to download
 ```bash
 uv sync
 mv results.json src/plots
-mv cmake-build-debug/logical_work.json src/plots
-cd src/plots
+mv logical_work.json src/plots
+cd plots
 uv run plot.py
 ```
 
 ## Operation Contracts & Ownership Rules
 
-**All four of the Structural Operations (search, insert, ordered_union, split) have been implemented with an efficient O(log(n)) Time Complexity and O(1) Node Allocations**. These are indeed the targeted theoretical results, which have been achieved and put into practice.
+**All four of the Structural Operations (search, insert, ordered_union, split) have been implemented with an efficient $O(log(n))$ Time Complexity and $O(1)$ Node Allocations**. These are indeed the targeted theoretical results, which have been achieved and put into practice.
 
 This means: **no rebuilding, no reinsertion, no copying**. 
 
@@ -190,17 +190,17 @@ In the case of **consuming Operations (ordered_union, split)**, **the consumed I
 
 ## Structural VS Rebuilding Operations
 
-In addition to the Structural Operations, **a baseline Rebuilding version of the ordered_union and split Operations has also been provided and used during testing to verify the expected results**. This was done to confirm that indeed **the baseline Rebuilding versions of the previously mentioned Operations are much slower than the Structural ones, demonstrating a O(nlog(n)) Time Complexity and O(n) Node Allocations**.
+In addition to the Structural Operations, **a baseline Rebuilding version of the ordered_union and split Operations has also been provided and used during testing to verify the expected results**. This was done to confirm that indeed **the baseline Rebuilding versions of the previously mentioned Operations are much slower than the Structural ones, demonstrating a $O(nlog(n))$ Time Complexity and $O(n)$ Node Allocations**.
 
 The following Plot proves the previously made claims:
 
 ![Empirical Runtime Scaling vs N](plots/runtime_scaling.png)
 
-Indeed, we can see a **clear Logarithmic trend for both the ordered_union (in red) and split (in green) Operations: they appear as a flat horizontal line in the log-log Plot**. 
+Indeed, we can see a **clear Logarithmic trend for both the ordered_union (in red) and split (in green) Operations: they appear as a flat horizontal line in the log-log Plot**. Please note that **the Plot uses very different bases for the two axes, therefore a Logarithmic trend appears as basically flat instead of curving downwards in this particular case**.
 
 **The search (in blue) and insert (in orange) Operations follow closely after: while their trend isn't a perfectly straight line like in the previous case, it is still very far from being Linear**. This minor discrepancy can probably be attributed to effect of **Caches**: **as these Operations rely on pointer chasing much more than the previous two, the increasing cost of Cache Misses (which naturally start to occur more and more often as the Input Size keeps growing and the entire Data Structure can no longer be fit into the faster L1 - L2 Caches, but rather has to be spilled to the slower L3 Cache) very likely begins to take over**.
 
-**The Rebuilding ordered_union (in purple) and Rebuilding split (in brown) show a completely different trend: they shoot up with a straight line with unary coefficient, which in a log-log Plot is a clear indicator of a O(nlog(n)) Complexity**, thus proving the expected theoretical results.
+**The Rebuilding ordered_union (in purple) and Rebuilding split (in brown) show a completely different trend: they shoot up with a straight line with unary coefficient, which in a log-log Plot is a clear indicator of a $O(nlog(n))$ Complexity**, thus proving the expected theoretical results. Once again, **please note that the reason why the Log-Linear trend appears like a straight line instead of a line curving upwards is due to the different scales of the two axes**.
 
 ## Logical Work Comparison
 
@@ -209,9 +209,12 @@ Indeed, we can see a **clear Logarithmic trend for both the ordered_union (in re
 The aim of these Tests was to **collect additional Instrumentation Metrics as a second form of proof of the Logarithmic Complexity of the Structural Operations, as opposed to the Linear or Log-Linear Complexity of the Rebuilding ones**. 
 
 The following Instrumentation Metrics were collected:
-- **Comparisons**
-- **Traversals**
-- **Allocations**
+```c++
+// Instrumentation Metrics
+static inline metric_t op_comparisons{0};
+static inline metric_t op_traversals{0};
+static inline metric_t op_allocations{0};
+```
 
 Let's analyze the plotted results:
 
@@ -228,17 +231,47 @@ In order to ensure functional correctness, **extensive testing has been performe
 The Source Code indeed includes a **dedicated executable for running such Tests, which additionally also generates a JSON Output File for collecting the Instrumentation Metrics used to generate the previous Plots when ran in Debug Mode**. 
 
 The provided executable contains and executes the following Tests:
-- **Generic Operations Test**
-- **Clear Method Test**
-- **Boundary Keys Test**
-- **Empty and Singleton Test**
-- **Split Edge Cases Test**
-- **Ordered Union Edge Cases Test**
-- **Rebuilding Operations Test**
-- **Reusability of Consumed Inputs Test**
-- **Address and Height Preservation Test**
-- **Randomized Seeds Test (1500+ Operations)**
-- **Complexity Instrumentation Test and generate JSON Output (Debug Mode only)**
+```c++
+// Run all Tests sequentially, one after the other
+static void run_tests() {
+    // ...
+
+    // Run Generic Operations Test
+    test_generic_operations();
+
+    // Run Clear Method Test
+    test_clear_method();
+
+    // Run Boundary Keys Test
+    test_boundary_keys();
+
+    // Run Empty and Singleton Test
+    test_empty_and_singleton();
+
+    // Run Split Edge Cases Test
+    test_split_edge_cases();
+
+    // Run Ordered Union Edge Cases Test
+    test_ordered_union_edge_cases();
+
+    // Run Rebuilding Operations Test
+    test_rebuilding_operations();
+
+    // Run Reusability of Consumed Inputs Test
+    test_reuse_consumed_inputs();
+
+    // Run Address and Height Preservation Test
+    test_address_and_height_preservation();
+
+    // Run Randomized Seeds Test (1500+ Operations)
+    test_randomized_seeds();
+
+    // Run Complexity Instrumentation Test and generate JSON Output
+    test_complexity_instrumentation();
+    
+    // ...
+}
+```
 
 When needed, **the following Reference Container is used to compare the output of any given Operation**:
 ```c++
@@ -261,15 +294,73 @@ Additionally, **the previously mentioned executable has also been run and checke
 
 ## Benchmarks & Performance
 
-TODO
+In order to ensure that the target theoretical Complexity was achieved in practice, **the Code has also been subjected to extensive benchmarking during the development process**. The benchmarking platform that was chosen for this is **Google Benchmark**.
+
+The Source Code indeed includes a **dedicated executable for running such Benchmarks, which additionally also generates a JSON Output File for collecting the Benchmarking Metrics used to generate the previous Plots when ran in Release Mode**. 
+
+All Benchmarks have been carried out across **six geometrically spaced Input Sizes, spanning from $N = 2^{10}$ to $N = 2^{20}$, using three different Seeds in order to properly capture the Randomness aspect of the Data Structure, as well as multiple repetitions per Seed**:
+```c++
+// Register benchmarks with geometric sizes and multiple Seeds
+// Sizes: 2^10 to 2^20 (6 sizes), Seeds: {17, 42, 1337} (3 seeds)
+#define BENCHMARK_CONFIG(func) \
+    BENCHMARK(func) \
+        ->Args({1 << 10, 17})->Args({1 << 10, 42})->Args({1 << 10, 1337}) \
+        ->Args({1 << 12, 17})->Args({1 << 12, 42})->Args({1 << 12, 1337}) \
+        ->Args({1 << 14, 17})->Args({1 << 14, 42})->Args({1 << 14, 1337}) \
+        ->Args({1 << 16, 17})->Args({1 << 16, 42})->Args({1 << 16, 1337}) \
+        ->Args({1 << 18, 17})->Args({1 << 18, 42})->Args({1 << 18, 1337}) \
+        ->Args({1 << 20, 17})->Args({1 << 20, 42})->Args({1 << 20, 1337}) \
+        ->UseManualTime() \
+        ->Complexity(benchmark::oLogN)
+```
+
+Please note that **Manual Timing was enabled in order to avoid the interference of Destructors and other Operations during the Critical Timed Section of the Benchmarks**.
+
+The provided executable contains and executes the following Benchmarks:
+```c++
+// Register benchmarks
+BENCHMARK_CONFIG(BM_SkipListSearch);
+BENCHMARK_CONFIG(BM_SkipListInsert);
+BENCHMARK_CONFIG(BM_SkipListOrderedUnion);
+BENCHMARK_CONFIG(BM_SkipListSplit);
+BENCHMARK_CONFIG(BM_SkipListSplitRebuilding);
+BENCHMARK_CONFIG(BM_SkipListOrderedUnionRebuilding);
+```
+
+**The provided Logarithmic Complexity Model was able to fit quite nicely to all four Structural Operations**:
+- **search and insert Operations achieved an RMS of around 50%**: not the lowest, but within reasonable bounds and probably caused by Pointer Chasing and Cache Misses.
+- **ordered_union and split Operations achieved an RMS of around 20%**: a very clean fit to the theoretical result.
+
+Meanwhile, **Rebuilding Operations failed to fit to the provided Logarithmic Complexity Model: RMS spiked up and above 150%, a clear sign that this version of the Operations is unable to achieve $O(log(n))$ Time Complexity**. **Testing a Linear Complexity Model instead, revealed a much lower RMS value of 10%**: a definite proof of our hypothesis.
+
+Additionally:
+- **the search Benchmark uses pre-generated queries with a 50% Hit Rate and 50% Miss Rate, spread evenly across the Key Range**.
+- **the insert Benchmark uses strictly absent Keys, spread evenly across the Key Range**.
+- **the ordered_union Benchmark uses equally sized disjointed Key Ranges**.
+- **the split Benchmark uses a pre-computed Pivot that generates balanced outputs**.
+
+For more details about how each Benchmark was conducted, please refer to the Source Code.
+
+For the sake of reproducibility, **the original JSON Output has been preserved: please refer to it for more detailed information about the Hardware of the Host that was used to run the application**.
+
+## Limitations
+
+It is important to note that, although Skip Lists are a fairly simple Randomized Data Structure and provide very efficient Operations, there also some **Limitations**:
+- **Memory Overhead, as unlike Arrays or Vectors, Skip Lists incur significant Pointer Storage Overhead ($O(n)$ extra Pointers distributed across Height levels)**.
+- **Cache Locality, as Pointer-based Node Allocation leads to non-contiguous Memory layouts, causing L3 Cache Misses at large Input Sizes that slightly degrade search and insert Performance compared to conventional flat Data Structures**.
 
 ## Declaration of Individual Work 
 
 All the work hereby presented has been **conducted independently and exclusively by myself, in compliance with the Academic Integrity Guidelines**.
 
 **AI Assistance was used during the development of the project**, in particular to:
-- **identify and resolve bugs**
-- **generate boilerplate code for the Tests and Benchmarks**
-- **generate the script for plotting the results**
+- **Identify and resolve bugs**.
+- **Generate boilerplate code for the Tests and Benchmarks**.
+- **Generate the script for plotting the results**.
 
 Regardless of this, **all the Source Code has been verified, authored and extensively modified by myself during the development process as if it were my own**.
+
+## Acknowledgements & References
+
+- W. Pugh, [*A Skip List Cookbook*](https://drum.lib.umd.edu/items/56c44671-3973-46b6-9e52-f71dc95af178)
+- [*Google Benchmark*](https://github.com/google/benchmark)
