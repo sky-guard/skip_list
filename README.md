@@ -115,7 +115,7 @@ private:
 } 
 ```
 
-Optionally, **when the library is compiled in DEBUG Mode and the Instrumentation is enabled**, the following **Logical Work Metrics can be collected** during execution:
+Optionally, **when the library is compiled in Debug Mode and the Instrumentation is enabled**, the following **Logical Work Metrics can be collected** during execution:
 ```c++
 // Metric
 using metric_t = uint64_t;
@@ -127,7 +127,7 @@ static inline metric_t op_traversals{0};
 static inline metric_t op_allocations{0};
 ```
 
-This is achieved through the use of **Macros**, which turn the corresponding operations into NOPs, ensuring that **the Performance of the library isn't affected in RELEASE Mode**.
+This is achieved through the use of **Macros**, which turn the corresponding operations into NOPs, ensuring that **the Performance of the library isn't affected in Release Mode**.
 
 ## Dependencies & Requirements
 
@@ -141,11 +141,40 @@ In order to set up the **Python Environment** required to plot the results, the 
 
 Please note that **the relevant required C++ (benchmark) and Python (numpy, pandas, matplotlib) libraries will automatically be downloaded by the respective Build Systems**.
 
-**Valgrind and other Memory Sanitizers must be installed separately**, if one wishes to repeat that part of the Testing process, **but are not required to build and run the library**.
+**Valgrind and other Sanitizers must be installed separately**, if one wishes to repeat that part of the Testing process, **but are not required to build and run the library**.
 
 ## Build & Run
 
-TODO
+In order to correctly build the Source Code and run the Code properly, please follow the following instructions.
+
+Clone the Repository and set up your Working Directory:
+```bash
+git clone git@github.com:sky-guard/skip_list.git
+cd skip_list
+```
+
+In order to run the Tests, generate a Debug Build Directory, build the following Target and then run it:
+```bash
+cmake -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug
+cmake --build cmake-build-debug --target skip_list_test -j $(nproc)
+./cmake-build-debug/skip_list_test
+```
+
+In order to run the Benchmarks, generate a Release Build Directory, build the following Target and then run it:
+```bash
+cmake -B cmake-build-release -DCMAKE_BUILD_TYPE=Release
+cmake --build cmake-build-release --target skip_list_benchmark -j $(nproc)
+./cmake-build-release/skip_list_benchmark --benchmark_out=results.json --benchmark_out_format=json
+```
+
+In order to generate the Plots, synchronize your Virtual Environment to download all the necessary Dependencies, move over the necessary JSON Outputs, change your Working Directory and then run the following script:
+```bash
+uv sync
+mv results.json src/plots
+mv cmake-build-debug/logical_work.json src/plots
+cd src/plots
+uv run plot.py
+```
 
 ## Operation Contracts & Ownership Rules
 
@@ -163,15 +192,15 @@ In the case of **consuming Operations (ordered_union, split)**, **the consumed I
 
 In addition to the Structural Operations, **a baseline Rebuilding version of the ordered_union and split Operations has also been provided and used during testing to verify the expected results**. This was done to confirm that indeed **the baseline Rebuilding versions of the previously mentioned Operations are much slower than the Structural ones, demonstrating a O(nlog(n)) Time Complexity and O(n) Node Allocations**.
 
-The following plot proves the previously made claims:
+The following Plot proves the previously made claims:
 
 ![Empirical Runtime Scaling vs N](plots/runtime_scaling.png)
 
-Indeed, we can see a **clear Logarithmic trend for both the ordered_union (in red) and split (in green) Operations: they appear as a flat horizontal line in the log-log plot**. 
+Indeed, we can see a **clear Logarithmic trend for both the ordered_union (in red) and split (in green) Operations: they appear as a flat horizontal line in the log-log Plot**. 
 
 **The search (in blue) and insert (in orange) Operations follow closely after: while their trend isn't a perfectly straight line like in the previous case, it is still very far from being Linear**. This minor discrepancy can probably be attributed to effect of **Caches**: **as these Operations rely on pointer chasing much more than the previous two, the increasing cost of Cache Misses (which naturally start to occur more and more often as the Input Size keeps growing and the entire Data Structure can no longer be fit into the faster L1 - L2 Caches, but rather has to be spilled to the slower L3 Cache) very likely begins to take over**.
 
-**The Rebuilding ordered_union (in purple) and Rebuilding split (in brown) show a completely different trend: they shoot up with a straight line with unary coefficient, which in a log-log plot is a clear indicator of a O(nlog(n)) Complexity**, thus proving the expected theoretical results.
+**The Rebuilding ordered_union (in purple) and Rebuilding split (in brown) show a completely different trend: they shoot up with a straight line with unary coefficient, which in a log-log Plot is a clear indicator of a O(nlog(n)) Complexity**, thus proving the expected theoretical results.
 
 ## Logical Work Comparison
 
@@ -194,7 +223,41 @@ Let's analyze the plotted results:
 
 ## Correctness Verification & Testing
 
-TODO
+In order to ensure functional correctness, **extensive testing has been performed during the development process**. 
+
+The Source Code indeed includes a **dedicated executable for running such Tests, which additionally also generates a JSON Output File for collecting the Instrumentation Metrics used to generate the previous Plots when ran in Debug Mode**. 
+
+The provided executable contains and executes the following Tests:
+- **Generic Operations Test**
+- **Clear Method Test**
+- **Boundary Keys Test**
+- **Empty and Singleton Test**
+- **Split Edge Cases Test**
+- **Ordered Union Edge Cases Test**
+- **Rebuilding Operations Test**
+- **Reusability of Consumed Inputs Test**
+- **Address and Height Preservation Test**
+- **Randomized Seeds Test (1500+ Operations)**
+- **Complexity Instrumentation Test and generate JSON Output (Debug Mode only)**
+
+When needed, **the following Reference Container is used to compare the output of any given Operation**:
+```c++
+std::set<key_t> ref;
+```
+
+In order to facilitate Testing, **the Skip List Public Interface also includes the following method to check that all the Invariants are satisfied**:
+```c++
+// Check invariants
+bool check_invariants() const;
+```
+
+The Invariants for the Skip List that are checked are the following:
+- **Absence of Cycles**
+- **Strictly increasing Keys**
+- **All Nodes present at the bottom level**
+- **Node Height Consistency**
+
+Additionally, **the previously mentioned executable has also been run and checked against Valgrind, AddressSanitizer and UndefinedBehaviorSanitizer**. Thus, **confirming the absence of Memory Leaks, Memory Corruptions and Undefined Behavior**.
 
 ## Benchmarks & Performance
 
@@ -202,4 +265,11 @@ TODO
 
 ## Declaration of Individual Work 
 
-TODO
+All the work hereby presented has been **conducted independently and exclusively by myself, in compliance with the Academic Integrity Guidelines**.
+
+**AI Assistance was used during the development of the project**, in particular to:
+- **identify and resolve bugs**
+- **generate boilerplate code for the Tests and Benchmarks**
+- **generate the script for plotting the results**
+
+Regardless of this, **all the Source Code has been verified, authored and extensively modified by myself during the development process as if it were my own**.
